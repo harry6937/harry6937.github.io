@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M2 Mobile 汇率计算器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #ffebeb;
+            color: #b30000;
+        }
+        h1 {
+            color: #ff0000;
+        }
+        input {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #b30000;
+            border-radius: 5px;
+            width: 80%;
+            text-align: center;
+        }
+        .result {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #b30000;
+        }
+    </style>
+</head>
+<body>
+    <h1>M2 Mobile 汇率计算器</h1>
+    
+    <label>人民币金额：</label><br>
+    <input type="number" id="rmbAmount" placeholder="输入人民币金额" step="0.01" oninput="calculateExchange()"><br>
+    
+    <label>物流费用：</label><br>
+    <input type="number" id="shippingCost" placeholder="输入物流费用" step="0.01" oninput="calculateExchange()"><br>
+    
+    <label>当前汇率（1人民币 = X 缅币）：</label><br>
+    <input type="number" id="exchangeRate" placeholder="输入汇率" step="0.0001" oninput="calculateExchange()"><br>
+    
+    <div class="result" id="result">换算后金额（缅币）：0.00</div>
+
+    <script>
+        function calculateExchange() {
+            let rmbAmount = parseFloat(document.getElementById("rmbAmount").value) || 0;
+            let shippingCost = parseFloat(document.getElementById("shippingCost").value) || 0;
+            let exchangeRate = parseFloat(document.getElementById("exchangeRate").value);
+
+            if (isNaN(exchangeRate) || exchangeRate === 0) {
+                document.getElementById("result").innerHTML = "换算后金额（缅币）：0.00";
+                return;
+            }
+
+            let convertedAmount = ((rmbAmount + shippingCost) / exchangeRate).toFixed(2);
+
+            document.getElementById("result").innerHTML = 
+                `换算后金额（缅币）：${convertedAmount}`;
+        }
+    </script>
+</body>
+</html>

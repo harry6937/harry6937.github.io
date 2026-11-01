@@ -1,0 +1,8 @@
+outputs/
+tools/node_modules/
+*.sqlite3*
+*.xlsx
+*.png
+*.local.json
+.clasp.json
+node_modules/

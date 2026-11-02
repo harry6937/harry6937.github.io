@@ -3,9 +3,18 @@ const HISTORY_SPREADSHEET_ID = 'YOUR_HISTORY_SPREADSHEET_ID';
 const USAGE_SHEET_ID = 0;
 const USAGE_HEADERS = ['Request ID','Used at (UTC)','Model ID','Model','IMEI 1','IMEI 2'];
 
-function doGet() {
-  return HtmlService.createHtmlOutput(APP_HTML).setTitle('M2 IMEI Desk')
+function doGet(event) {
+  const params = event && event.parameter || {};
+  const channel = String(params.channel || '');
+  const mode = params.mode === 'popup' ? 'popup' : 'bridge';
+  const config = { origin:'https://harry6937.github.io', channel:/^[a-f0-9-]{36}$/.test(channel) ? channel : '', mode };
+  const html = BRIDGE_HTML.replace('__BRIDGE_CONFIG__', JSON.stringify(config).replace(/</g,'\\u003c'));
+  const output = HtmlService.createHtmlOutput(html).setTitle('M2 IMEI Desk · Google Sheets')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  // Only the non-interactive, origin-checked bridge may be embedded.
+  // Deployment access remains MYSELF; no spreadsheet is made public.
+  if (config.channel && mode === 'bridge') output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return output;
 }
 
 function parseImeis_(value) {

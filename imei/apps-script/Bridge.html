@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M2 IMEI Desk · Google Sheets</title>
+<style>body{font:16px/1.6 system-ui,sans-serif;background:#f3f5f5;color:#172c3c;margin:0;padding:40px}main{max-width:480px;margin:8vh auto;background:white;padding:32px;border-radius:16px}h1{font-size:25px}p{color:#637982}a{color:#086e5d;font-weight:600}</style></head>
+<body><main><h1>M2 IMEI Desk</h1><p id="state">Your workspace is on GitHub. This window connects it to your private Google Sheets.</p><a href="https://harry6937.github.io/imei/" target="_blank" rel="noopener noreferrer">Open IMEI Desk</a></main>
+<script>
+(() => {
+  'use strict';
+  const config = __BRIDGE_CONFIG__;
+  const protocol = 'm2-imei-bridge-v2';
+  const host = config.mode === 'popup' ? window.top.opener : window.top;
+  if (!config.channel || !host || host === window) return;
+  const reply = payload => host.postMessage({protocol,channel:config.channel,...payload},config.origin);
+  const inflight = new Set();
+  let connected = false;
+  const announce = () => { if(!connected) reply({type:'ready'}); };
+  const announceTimer = setInterval(announce,1000);
+  window.addEventListener('message',event => {
+    const message = event.data;
+    if (event.origin !== config.origin || event.source !== host || !message || message.protocol !== protocol || message.channel !== config.channel) return;
+    if(message.type === 'connect') {
+      connected = true; clearInterval(announceTimer);
+      document.getElementById('state').textContent = 'Connected. Return to your GitHub workspace. Keep this connection window open while using the desk.';
+      reply({type:'connected'}); return;
+    }
+    if(!connected || message.type !== 'call' || !/^[a-f0-9-]{36}$/.test(String(message.id)) || inflight.has(message.id)) return;
+    const method = message.method, args = message.args;
+    const lengths = {getDashboard:0,getModelState:2,extractPair:2};
+    if(!Object.prototype.hasOwnProperty.call(lengths,method) || !Array.isArray(args) || args.length !== lengths[method] || args.some(v => typeof v !== 'string' || v.length > 100)) return;
+    inflight.add(message.id);
+    const done = payload => { inflight.delete(message.id); reply({type:'result',id:message.id,...payload}); };
+    const runner = google.script.run.withSuccessHandler(data => done({data})).withFailureHandler(error => done({error:error.message || 'Google Sheets could not complete this request.'}));
+    if(method === 'getDashboard') runner.getDashboard();
+    else if(method === 'getModelState') runner.getModelState(args[0],args[1]);
+    else runner.extractPair(args[0],args[1]);
+  });
+  announce();
+})();
+</script></body></html>

@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+const root=new URL('../',import.meta.url);
+const core=vm.createContext({URL,console});
+vm.runInContext(await fs.readFile(new URL('core.js',root),'utf8'),core);
+const seedContext=vm.createContext({window:{}});vm.runInContext(await fs.readFile(new URL('seed.js',root),'utf8'),seedContext);
+const seed=seedContext.window.M2_SEED;
+let passed=0;function test(name,fn){fn();passed++;console.log('PASS',name)}
+test('all 22 repositories preserved in 26 entries',()=>{assert.equal(seed.tools.length,26);assert.equal(new Set(seed.tools.map(t=>t.repository)).size,22)});
+test('unsafe URL schemes and embedded credentials rejected',()=>{for(const url of ['javascript:alert(1)','data:text/html,x','file:///etc/passwd','https://name:secret@example.com/'])assert.throws(()=>core.M2Core.safeUrl(url));assert.equal(core.M2Core.safeUrl('https://example.com/'),'https://example.com/')});
+test('duplicate IDs, oversized categories and invalid imports rejected',()=>{const x=structuredClone(seed);x.tools.push(x.tools[0]);assert.throws(()=>core.M2Core.normalize(x));assert.throws(()=>core.M2Core.normalize({schema:2}));const y=structuredClone(seed);y.categories=Array(51).fill('x');assert.throws(()=>core.M2Core.normalize(y))});
+test('deleted entries are retained only in trash; hidden entries visible in management',()=>{const x=structuredClone(seed);x.tools[0].deleted=true;x.tools[1].hidden=true;assert.equal(core.M2Core.filter(x).length,24);assert.equal(core.M2Core.filter(x,{view:'trash'}).length,1);assert.equal(core.M2Core.filter(x,{view:'manage'}).length,25)});
+let rows=[['版本','保存时间','请求编号','清单快照']],locked=false,active='owner@example.com';
+const sheet={getLastRow:()=>rows.length,getLastColumn:()=>Math.max(...rows.map(r=>r.length)),getMaxColumns:()=>30,insertColumnsAfter:()=>{},getRange:(r,c,n,w)=>({getValues:()=>Array.from({length:n},(_,i)=>Array.from({length:w},(_,j)=>rows[r-1+i]?.[c-1+j]??'')),setValues:value=>{for(let i=0;i<n;i++){rows[r-1+i]??=[];for(let j=0;j<w;j++)rows[r-1+i][c-1+j]=value[i][j]}}})};
+const backend=vm.createContext({console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>({OWNER:'owner@example.com',SHEET_ID:'test-sheet'})[k]})},Session:{getActiveUser:()=>({getEmail:()=>active})},SpreadsheetApp:{openById:()=>({getSheetByName:()=>sheet}),flush:()=>{}},LockService:{getScriptLock:()=>({waitLock:()=>{assert.equal(locked,false);locked=true},releaseLock:()=>{locked=false}})},Utilities:{Charset:{UTF_8:'utf8'},base64Encode:s=>Buffer.from(s).toString('base64'),base64Decode:s=>Buffer.from(s,'base64'),newBlob:b=>({getDataAsString:()=>Buffer.from(b).toString('utf8')})}});
+vm.runInContext(await fs.readFile(new URL('apps-script/Code.gs',root),'utf8'),backend);
+const payload={requestId:'00000000-0000-4000-8000-000000000001',baseVersion:0,data:JSON.parse(JSON.stringify(seed))};
+test('empty cloud does not invent a saved version',()=>assert.equal(backend.hubRead().version,0));
+test('snapshot save round-trips Unicode and tool data under lock',()=>{assert.equal(backend.hubSave(payload).version,1);assert.equal(backend.hubRead().data.tools[0].name,'手机标签 OCR');assert.equal(locked,false)});
+test('retry after lost response is idempotent',()=>{assert.equal(backend.hubSave(payload).duplicate,true);assert.equal(rows.length,2)});
+test('stale device receives conflict without overwriting',()=>{const p={...payload,requestId:'00000000-0000-4000-8000-000000000002'};assert.equal(backend.hubSave(p).conflict,true);assert.equal(rows.length,2)});
+test('cloud keeps deletion tombstones across devices',()=>{const p=structuredClone(payload);p.baseVersion=1;p.requestId='00000000-0000-4000-8000-000000000003';p.data.tools[0].deleted=true;assert.equal(backend.hubSave(p).version,2);assert.equal(backend.hubRead().data.tools[0].deleted,true)});
+test('non-owner cannot read or write cloud',()=>{active='another@example.com';assert.throws(()=>backend.hubRead());assert.throws(()=>backend.hubSave(payload));active='owner@example.com'});
+test('invalid cloud payload is rejected without writes',()=>{const p=structuredClone(payload);p.data.tools[0].url='javascript:alert(1)';assert.throws(()=>backend.hubSave(p));assert.equal(rows.length,3)});
+for(const f of ['app.js','cloud.js','config.js','seed.js','core.js','apps-script/Deploy.gs'])new vm.Script(await fs.readFile(new URL(f,root),'utf8'),{filename:f});
+console.log(`${passed} checks passed; all JavaScript parsed.`);
+export default passed;

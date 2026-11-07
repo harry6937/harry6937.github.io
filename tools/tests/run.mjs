@@ -24,5 +24,18 @@ test('cloud keeps deletion tombstones across devices',()=>{const p=structuredClo
 test('non-owner cannot read or write cloud',()=>{active='another@example.com';assert.throws(()=>backend.hubRead());assert.throws(()=>backend.hubSave(payload));active='owner@example.com'});
 test('invalid cloud payload is rejected without writes',()=>{const p=structuredClone(payload);p.data.tools[0].url='javascript:alert(1)';assert.throws(()=>backend.hubSave(p));assert.equal(rows.length,3)});
 for(const f of ['app.js','cloud.js','config.js','seed.js','core.js','apps-script/Deploy.gs'])new vm.Script(await fs.readFile(new URL(f,root),'utf8'),{filename:f});
+let onMessage;const sent=[];const peer={postMessage:(msg,origin)=>sent.push({msg,origin})};
+const channel='00000000-0000-4000-8000-000000000099';
+const cloudWindow={M2_CONFIG:{cloudUrl:'https://script.google.com/macros/s/test/exec'},addEventListener:(name,fn)=>{onMessage=fn}};
+const cloudCtx=vm.createContext({window:cloudWindow,URL,crypto:{randomUUID:()=>channel},location:{origin:'http://127.0.0.1:8892'},document:{createElement:()=>({}),body:{append:()=>{}}},setTimeout:()=>1,clearTimeout:()=>{}});
+vm.runInContext(await fs.readFile(new URL('cloud.js',root),'utf8'),cloudCtx);
+const connecting=cloudWindow.M2Cloud.connect();
+const ready={namespace:'m2-hub',channel,type:'ready'};
+test('bridge rejects deceptive domains and wrong channels',()=>{onMessage({origin:'https://evil-script.googleusercontent.com.evil.example',source:peer,data:ready});onMessage({origin:'https://n-example-script.googleusercontent.com',source:peer,data:{...ready,channel:'wrong'}});assert.equal(cloudWindow.M2Cloud.connected,false)});
+onMessage({origin:'https://n-example-script.googleusercontent.com',source:peer,data:ready});await connecting;
+test('real Google sandbox domain connects and is acknowledged',()=>{assert.equal(cloudWindow.M2Cloud.connected,true);assert.equal(sent[0].msg.type,'ack')});
+const reading=cloudWindow.M2Cloud.call('read',null);const request=sent.at(-1).msg;
+onMessage({origin:'https://n-example-script.googleusercontent.com',source:peer,data:{namespace:'m2-hub',channel,type:'result',id:request.id,result:{version:3}}});
+assert.equal((await reading).version,3);passed++;console.log('PASS bridge RPC response matches bound peer and request');
 console.log(`${passed} checks passed; all JavaScript parsed.`);
 export default passed;

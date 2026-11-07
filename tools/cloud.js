@@ -1,7 +1,7 @@
 (function(){
   'use strict';
   const pending=new Map();let peer=null,peerOrigin='',channel='',frame=null,popup=null,attempt=null;
-  function originAllowed(origin){return /^https:\/\/([a-z0-9-]+\.)?script\.googleusercontent\.com$/.test(origin)||origin==='https://script.google.com'}
+  function originAllowed(origin){return /^https:\/\/(?:[a-z0-9-]+-)?script\.googleusercontent\.com$/.test(origin)||origin==='https://script.google.com'}
   function reset(){peer=null;peerOrigin='';for(const {reject,timer} of pending.values()){clearTimeout(timer);reject(Error('云端连接已重置'))}pending.clear()}
   window.addEventListener('message',event=>{
     const m=event.data;if(!m||m.namespace!=='m2-hub'||!originAllowed(event.origin)||m.channel!==channel)return;
@@ -21,7 +21,7 @@
     if(attempt){clearTimeout(attempt.timer);attempt.reject(Error('正在重新连接'));attempt=null}reset();
     channel=crypto.randomUUID();const u=new URL(window.M2_CONFIG.cloudUrl);u.searchParams.set('channel',channel);u.searchParams.set('origin',location.origin);u.searchParams.set('mode',usePopup?'popup':'frame');
     let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});
-    attempt={promise,resolve,reject,timer:setTimeout(()=>{attempt=null;reject(Error('请点击“连接 Google 云端”，完成 Google 登录后保留连接窗口。'))},20000)};
+    attempt={promise,resolve,reject,timer:setTimeout(()=>{attempt=null;reject(Error('请点击“连接 Google 云端”，完成 Google 登录后保留连接窗口。'))},45000)};
     if(usePopup){popup=window.open(u.href,'m2-cloud-connection','popup,width=460,height=570');if(!popup){clearTimeout(attempt.timer);attempt=null;reject(Error('浏览器拦截了连接窗口，请允许本站弹出窗口后重试。'))}}
     else{if(frame)frame.remove();frame=document.createElement('iframe');frame.hidden=true;frame.title='Google 云端同步连接';frame.src=u.href;document.body.append(frame)}
     return promise;
